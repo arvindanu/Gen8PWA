@@ -1,0 +1,74 @@
+name: Build GEN8 Android App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'public/**'
+      - 'resources/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-android.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Validate deployed website URL
+        env:
+          GEN8_WEB_URL: ${{ vars.GEN8_WEB_URL }}
+        run: |
+          if [ -z "$GEN8_WEB_URL" ]; then
+            echo "Missing GitHub repository variable GEN8_WEB_URL. Set it to the deployed HTTPS GEN8 website URL (Vercel domain)."
+            exit 1
+          fi
+          case "$GEN8_WEB_URL" in https://*) ;; *) echo "GEN8_WEB_URL must start with https://"; exit 1 ;; esac
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Android project
+        env:
+          GEN8_WEB_URL: ${{ vars.GEN8_WEB_URL }}
+        run: |
+          npx cap add android
+          npx cap sync android
+          npx capacitor-assets generate --android --iconBackgroundColor '#080808' --iconBackgroundColorDark '#080808' --splashBackgroundColor '#000000' --splashBackgroundColorDark '#000000'
+
+      - name: Build debug APK
+        run: cd android && ./gradlew assembleDebug
+
+      - name: Build release AAB (unsigned)
+        run: cd android && ./gradlew bundleRelease
+
+      - name: Upload Android builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: GEN8-Android-builds
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
