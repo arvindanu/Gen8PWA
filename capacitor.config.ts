@@ -15,6 +15,7 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: false,
+    adjustMarginsForEdgeToEdge: 'auto',
   },
 };
 
